@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>進化版ミニFPSゲーム</title>
+<style>
+  body { margin:0; overflow:hidden; background:black; }
+  canvas { display:block; }
+  #ui {
+    position:absolute;
+    top:10px;
+    left:10px;
+    color:white;
+    font-family:sans-serif;
+  }
+</style>
+</head>
+<body>
+<div id="ui">クリックで射撃 / WASD移動 / マウスで視点 | スコア: <span id="score">0</span></div>
+<canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let player = { x: canvas.width/2, y: canvas.height/2, angle:0, speed:4 };
+let bullets = [];
+let enemies = [];
+let score = 0;
+
+// 敵生成
+function spawnEnemy(){
+  enemies.push({
+    x: Math.random()*canvas.width,
+    y: Math.random()*canvas.height,
+    size:20,
+    speed:1.5
+  });
+}
+for(let i=0;i<5;i++) spawnEnemy();
+
+// キー操作
+let keys = {};
+document.addEventListener("keydown", e=>keys[e.key.toLowerCase()]=true);
+document.addEventListener("keyup", e=>keys[e.key.toLowerCase()]=false);
+
+// マウス視点
+canvas.addEventListener("mousemove", e=>{
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  player.angle = Math.atan2(my - player.y, mx - player.x);
+});
+
+// 射撃
+canvas.addEventListener("click", ()=>{
+  bullets.push({
+    x: player.x,
+    y: player.y,
+    dx: Math.cos(player.angle)*8,
+    dy: Math.sin(player.angle)*8
+  });
+});
+
+function update(){
+  // 移動
+  if(keys["w"]) {
+    player.x += Math.cos(player.angle)*player.speed;
+    player.y += Math.sin(player.angle)*player.speed;
+  }
+  if(keys["s"]) {
+    player.x -= Math.cos(player.angle)*player.speed;
+    player.y -= Math.sin(player.angle)*player.speed;
+  }
+  if(keys["a"]) {
+    player.x += Math.cos(player.angle - Math.PI/2)*player.speed;
+    player.y += Math.sin(player.angle - Math.PI/2)*player.speed;
+  }
+  if(keys["d"]) {
+    player.x += Math.cos(player.angle + Math.PI/2)*player.speed;
+    player.y += Math.sin(player.angle + Math.PI/2)*player.speed;
+  }
+
+  // 弾更新
+  bullets.forEach(b=>{
+    b.x += b.dx;
+    b.y += b.dy;
+  });
+
+  // 敵追跡
+  enemies.forEach(e=>{
+    const dx = player.x - e.x;
+    const dy = player.y - e.y;
+    const dist = Math.sqrt(dx*dx+dy*dy);
+    e.x += dx/dist * e.speed;
+    e.y += dy/dist * e.speed;
+  });
+
+  // 衝突判定
+  bullets.forEach((b,bi)=>{
+    enemies.forEach((e,ei)=>{
+      let dx = b.x - e.x;
+      let dy = b.y - e.y;
+      if(Math.sqrt(dx*dx+dy*dy) < e.size){
+        enemies.splice(ei,1);
+        bullets.splice(bi,1);
+        score++;
+        document.getElementById("score").textContent = score;
+        spawnEnemy();
+      }
+    });
+  });
+}
+
+function draw(){
+  ctx.fillStyle="black";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // プレイヤー（向き付き）
+  ctx.save();
+  ctx.translate(player.x, player.y);
+  ctx.rotate(player.angle);
+  ctx.fillStyle="cyan";
+  ctx.fillRect(-10,-10,20,20);
+  ctx.fillStyle="white";
+  ctx.fillRect(10,-3,10,6); // 銃っぽい
+  ctx.restore();
+
+  // 弾
+  ctx.fillStyle="yellow";
+  bullets.forEach(b=> ctx.fillRect(b.x-2,b.y-2,4,4));
+
+  // 敵
+  ctx.fillStyle="red";
+  enemies.forEach(e=>{
+    ctx.beginPath();
+    ctx.arc(e.x,e.y,e.size,0,Math.PI*2);
+    ctx.fill();
+  });
+}
+
+function loop(){
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+</body>
+</html>
