@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>進化版ミニFPSゲーム</title>
+<title>進化版FPSゲーム（HP・攻撃付き）</title>
 <style>
   body { margin:0; overflow:hidden; background:black; }
   canvas { display:block; }
@@ -16,7 +16,7 @@
 </style>
 </head>
 <body>
-<div id="ui">クリックで射撃 / WASD移動 / マウスで視点 | スコア: <span id="score">0</span></div>
+<div id="ui">HP: <span id="hp">100</span> | スコア: <span id="score">0</span></div>
 <canvas id="game"></canvas>
 
 <script>
@@ -25,28 +25,27 @@ const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-let player = { x: canvas.width/2, y: canvas.height/2, angle:0, speed:4 };
+let player = { x: canvas.width/2, y: canvas.height/2, angle:0, speed:4, hp:100 };
 let bullets = [];
+let enemyBullets = [];
 let enemies = [];
 let score = 0;
 
-// 敵生成
 function spawnEnemy(){
   enemies.push({
     x: Math.random()*canvas.width,
     y: Math.random()*canvas.height,
     size:20,
-    speed:1.5
+    speed:1.2,
+    shootTimer:0
   });
 }
-for(let i=0;i<5;i++) spawnEnemy();
+for(let i=0;i<3;i++) spawnEnemy();
 
-// キー操作
 let keys = {};
 document.addEventListener("keydown", e=>keys[e.key.toLowerCase()]=true);
 document.addEventListener("keyup", e=>keys[e.key.toLowerCase()]=false);
 
-// マウス視点
 canvas.addEventListener("mousemove", e=>{
   const rect = canvas.getBoundingClientRect();
   const mx = e.clientX - rect.left;
@@ -54,7 +53,6 @@ canvas.addEventListener("mousemove", e=>{
   player.angle = Math.atan2(my - player.y, mx - player.x);
 });
 
-// 射撃
 canvas.addEventListener("click", ()=>{
   bullets.push({
     x: player.x,
@@ -65,7 +63,8 @@ canvas.addEventListener("click", ()=>{
 });
 
 function update(){
-  // 移動
+  if(player.hp <= 0) return;
+
   if(keys["w"]) {
     player.x += Math.cos(player.angle)*player.speed;
     player.y += Math.sin(player.angle)*player.speed;
@@ -83,22 +82,29 @@ function update(){
     player.y += Math.sin(player.angle + Math.PI/2)*player.speed;
   }
 
-  // 弾更新
-  bullets.forEach(b=>{
-    b.x += b.dx;
-    b.y += b.dy;
-  });
+  bullets.forEach(b=>{ b.x += b.dx; b.y += b.dy; });
+  enemyBullets.forEach(b=>{ b.x += b.dx; b.y += b.dy; });
 
-  // 敵追跡
   enemies.forEach(e=>{
     const dx = player.x - e.x;
     const dy = player.y - e.y;
     const dist = Math.sqrt(dx*dx+dy*dy);
     e.x += dx/dist * e.speed;
     e.y += dy/dist * e.speed;
+
+    e.shootTimer++;
+    if(e.shootTimer > 60){
+      e.shootTimer = 0;
+      enemyBullets.push({
+        x: e.x,
+        y: e.y,
+        dx: dx/dist*5,
+        dy: dy/dist*5
+      });
+    }
   });
 
-  // 衝突判定
+  // 弾ヒット
   bullets.forEach((b,bi)=>{
     enemies.forEach((e,ei)=>{
       let dx = b.x - e.x;
@@ -112,33 +118,62 @@ function update(){
       }
     });
   });
+
+  // 敵弾ヒット
+  enemyBullets.forEach((b,bi)=>{
+    let dx = b.x - player.x;
+    let dy = b.y - player.y;
+    if(Math.sqrt(dx*dx+dy*dy) < 15){
+      enemyBullets.splice(bi,1);
+      player.hp--;
+      document.getElementById("hp").textContent = player.hp;
+    }
+  });
+}
+
+function drawHuman(x,y,angle,color){
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.rotate(angle);
+
+  // 頭
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(0,-15,8,0,Math.PI*2);
+  ctx.fill();
+
+  // 体
+  ctx.fillRect(-3,-10,6,20);
+
+  // 銃
+  ctx.fillStyle = "white";
+  ctx.fillRect(5,-2,12,4);
+
+  ctx.restore();
 }
 
 function draw(){
   ctx.fillStyle="black";
   ctx.fillRect(0,0,canvas.width,canvas.height);
 
-  // プレイヤー（向き付き）
-  ctx.save();
-  ctx.translate(player.x, player.y);
-  ctx.rotate(player.angle);
-  ctx.fillStyle="cyan";
-  ctx.fillRect(-10,-10,20,20);
-  ctx.fillStyle="white";
-  ctx.fillRect(10,-3,10,6); // 銃っぽい
-  ctx.restore();
+  drawHuman(player.x, player.y, player.angle, "cyan");
 
-  // 弾
+  enemies.forEach(e=>{
+    const angle = Math.atan2(player.y-e.y, player.x-e.x);
+    drawHuman(e.x, e.y, angle, "red");
+  });
+
   ctx.fillStyle="yellow";
   bullets.forEach(b=> ctx.fillRect(b.x-2,b.y-2,4,4));
 
-  // 敵
-  ctx.fillStyle="red";
-  enemies.forEach(e=>{
-    ctx.beginPath();
-    ctx.arc(e.x,e.y,e.size,0,Math.PI*2);
-    ctx.fill();
-  });
+  ctx.fillStyle="orange";
+  enemyBullets.forEach(b=> ctx.fillRect(b.x-2,b.y-2,4,4));
+
+  if(player.hp <= 0){
+    ctx.fillStyle="white";
+    ctx.font="50px sans-serif";
+    ctx.fillText("GAME OVER", canvas.width/2-150, canvas.height/2);
+  }
 }
 
 function loop(){
